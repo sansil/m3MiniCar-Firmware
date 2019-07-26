@@ -1,0 +1,8 @@
+_build/
+hex/
+pca10040e/
+pca10056/
+pca10056e/
+Output/
+ble_app_uart.eww
+pca10040/s132/ses/flash_placement.xml
