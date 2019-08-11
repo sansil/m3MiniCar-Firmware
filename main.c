@@ -68,6 +68,8 @@
 #include "bsp_btn_ble.h"
 #include "nrf_pwr_mgmt.h"
 
+#include "nrf_gpio.h"
+
 #if defined(UART_PRESENT)
 #include "nrf_uart.h"
 #endif
@@ -104,6 +106,12 @@
 
 #define UART_TX_BUF_SIZE 256 /**< UART TX buffer size. */
 #define UART_RX_BUF_SIZE 256 /**< UART RX buffer size. */
+
+// Motor and servos pin
+#define PIN_PWM_SERVO 4
+#define PIN_PWM_MOTOR 28
+#define PIN_DIR_MOTOR 29
+#define PIN_IN_MOTOR 30
 
 BLE_NUS_DEF(m_nus, NRF_SDH_BLE_TOTAL_LINK_COUNT); /**< BLE NUS service instance. */
 NRF_BLE_GATT_DEF(m_gatt);													/**< GATT module instance. */
@@ -246,10 +254,12 @@ static void nus_data_handler(ble_nus_evt_t *p_evt)
 		else if (strcmp(uart_string, "SENTIDO_A") == 0)
 		{
 			m_command.command_t = SENTIDO_A;
+			m_command.servo_pos = atoi(pch);
 		}
-		else if (strcmp(uart_string, "SENTIDO_B") == 0)
+		else if (strcmp(uart_string, "SENTIDO_R") == 0)
 		{
 			m_command.command_t = SENTIDO_R;
+			m_command.servo_pos = atoi(pch);
 		}
 		else
 		{
@@ -740,13 +750,15 @@ void uart_command_handler(uart_command_obj *m_command)
 
 	case SENTIDO_A:
 		// Put Action to COMMAND_3 here.
-		while (app_pwm_channel_duty_set(&PWM1, 0, 13) == NRF_ERROR_BUSY)
+		nrf_gpio_pin_set(PIN_DIR_MOTOR);
+		while (app_pwm_channel_duty_set(&PWM1, 1, m_command->servo_pos) == NRF_ERROR_BUSY)
 			;
 		break;
 
 	case SENTIDO_R:
 		// Put Action to COMMAND_3 here.
-		while (app_pwm_channel_duty_set(&PWM1, 0, 13) == NRF_ERROR_BUSY)
+		nrf_gpio_pin_clear(PIN_DIR_MOTOR);
+		while (app_pwm_channel_duty_set(&PWM1, 1, m_command->servo_pos) == NRF_ERROR_BUSY)
 			;
 		break;
 	case NO_COMMAND:
@@ -768,9 +780,9 @@ void pwm_init()
 {
 
 	app_pwm_config_t pwm_config = {
-			.pins = {4, APP_PWM_NOPIN},
+			.pins = {PIN_PWM_SERVO, PIN_PWM_MOTOR},
 			.pin_polarity = {APP_PWM_POLARITY_ACTIVE_HIGH, APP_PWM_POLARITY_ACTIVE_LOW},
-			.num_of_channels = 1,
+			.num_of_channels = 2,
 			.period_us = 20000L};
 	uint32_t err_code;
 	err_code = app_pwm_init(&PWM1, &pwm_config, NULL);
@@ -801,7 +813,10 @@ int main(void)
 	printf("\r\nUART started.\r\n");
 	NRF_LOG_INFO("Debug logging for UART over RTT started.");
 	advertising_start();
-
+	nrf_gpio_cfg_output(PIN_DIR_MOTOR);
+	//	nrf_gpio_cfg_output(PIN_IN_MOTOR);
+	nrf_gpio_pin_clear(PIN_DIR_MOTOR);
+	//nrf_gpio_pin_clear(PIN_IN_MOTOR);
 	pwm_init();
 	m_command.command_t = DIRECCION_C;
 	// Enter main loop.

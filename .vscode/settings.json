@@ -1,5 +1,6 @@
 {
   "files.associations": {
     "nordic_common.h": "c"
-  }
+  },
+  "C_Cpp.errorSquiggles": "Disabled"
 }
