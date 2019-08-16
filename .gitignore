@@ -1,7 +1,6 @@
 _build/
 hex/
 pca10040e/
-pca10056/
 pca10056e/
 Output/
 ble_app_uart.eww
