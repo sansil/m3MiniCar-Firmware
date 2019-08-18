@@ -108,9 +108,9 @@
 #define UART_RX_BUF_SIZE 256 /**< UART RX buffer size. */
 
 // Motor and servos pin
-#define PIN_PWM_SERVO 4
-#define PIN_PWM_MOTOR 28
-#define PIN_DIR_MOTOR 29
+#define PIN_PWM_SERVO 19 //4
+#define PIN_PWM_MOTOR 4	//28
+#define PIN_DIR_MOTOR 12 //29
 #define PIN_IN_MOTOR 30
 
 BLE_NUS_DEF(m_nus, NRF_SDH_BLE_TOTAL_LINK_COUNT); /**< BLE NUS service instance. */
@@ -756,7 +756,7 @@ void uart_command_handler(uart_command_obj *m_command)
 		break;
 
 	case SENTIDO_R:
-		// Put Action to COMMAND_3 here.
+		// Put Action to COMMAND_3 here.sd
 		nrf_gpio_pin_clear(PIN_DIR_MOTOR);
 		while (app_pwm_channel_duty_set(&PWM1, 1, m_command->servo_pos) == NRF_ERROR_BUSY)
 			;

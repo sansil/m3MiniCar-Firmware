@@ -4,8 +4,7 @@
         "ProjectFolder": "${workspaceFolder}/pca10040/s132/armgcc",
         "sdkConfigFolder": "${workspaceFolder}/pca10040/s132/config"
     },
-    "configurations": [
-        {
+    "configurations": [{
             "name": "pca10040/s132",
             "includePath": [
                 "${workspaceFolder}/**",
@@ -48,7 +47,8 @@
                 "NRF_SD_BLE_API_VERSION=6",
                 "S132",
                 "SOFTDEVICE_PRESENT",
-                "SWI_DISABLE0"
+                "SWI_DISABLE0",
+                "BOARD_CUSTOM"
             ],
             "compilerPath": "/home/sansil/gcc-arm-none-eabi-8-2019/bin/arm-none-eabi-gcc",
             "cStandard": "c11",
