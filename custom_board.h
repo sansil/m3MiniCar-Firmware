@@ -26,14 +26,14 @@ extern "C"
 #define LED_CAR_RIGHT 45
 #define LED_RGB_BLUE 30 // no se usa
 
-#define LEDS_ACTIVE_STATE 0
+#define LEDS_ACTIVE_STATE 1
 
 #define BSP_LED_0 LED_CAR_LEFT
 #define BSP_LED_1 LED_CAR_RIGHT
 #define BSP_LED_2 LED_CAR_LEFT
 
-#define LEDS_LIST                            \
-  {                                          \
+#define LEDS_LIST               \
+  {                             \
     LED_CAR_LEFT, LED_CAR_RIGHT \
   }
 

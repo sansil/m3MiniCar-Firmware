@@ -77,6 +77,19 @@
       "problemMatcher": []
     },
     {
+      "label": "flash_10056",
+      "type": "shell",
+      "command": "make flash",
+      "options": {
+        "cwd": "${workspaceFolder}/pca10056/s140/armgcc"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "flash_softdevice",
       "type": "shell",
       "command": "make flash_softdevice",

@@ -111,6 +111,7 @@
 #define PIN_PWM_SERVO 19 //4
 #define PIN_PWM_MOTOR 4	//28
 #define PIN_DIR_MOTOR 12 //29
+#define PIN_LUCES 47		 // 32+15
 #define PIN_IN_MOTOR 30
 
 BLE_NUS_DEF(m_nus, NRF_SDH_BLE_TOTAL_LINK_COUNT); /**< BLE NUS service instance. */
@@ -132,13 +133,17 @@ typedef enum
 	DIRECCION_C,
 	DIRECCION_CUSTOM,
 	SENTIDO_A,
-	SENTIDO_R
+	SENTIDO_R,
+	VELOCIDAD,
+	LUCES
 } uart_command_t;
 
 typedef struct
 {
 	uart_command_t command_t;
 	int servo_pos;
+	int luz_estado;
+	int velocidad;
 } uart_command_obj;
 
 uart_command_obj m_command;
@@ -260,6 +265,16 @@ static void nus_data_handler(ble_nus_evt_t *p_evt)
 		{
 			m_command.command_t = SENTIDO_R;
 			m_command.servo_pos = atoi(pch);
+		}
+		else if (strcmp(uart_string, "LUCES") == 0)
+		{
+			m_command.command_t = LUCES;
+			m_command.luz_estado = atoi(pch);
+		}
+		else if (strcmp(uart_string, "VELOCIDAD") == 0)
+		{
+			m_command.command_t = VELOCIDAD;
+			m_command.velocidad = atoi(pch);
 		}
 		else
 		{
@@ -761,6 +776,12 @@ void uart_command_handler(uart_command_obj *m_command)
 		while (app_pwm_channel_duty_set(&PWM1, 1, m_command->servo_pos) == NRF_ERROR_BUSY)
 			;
 		break;
+	case LUCES:
+		if (m_command->luz_estado)
+			nrf_gpio_pin_set(PIN_LUCES);
+		else
+			nrf_gpio_pin_clear(PIN_LUCES);
+		break;
 	case NO_COMMAND:
 		// No command has been received -> Do nothing
 		break;
@@ -819,6 +840,8 @@ int main(void)
 	//nrf_gpio_pin_clear(PIN_IN_MOTOR);
 	pwm_init();
 	m_command.command_t = DIRECCION_C;
+	m_command.velocidad = 200;
+	m_command.luz_estado = 0;
 	// Enter main loop.
 	for (;;)
 	{
