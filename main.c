@@ -83,9 +83,12 @@
 
 #include "app_pwm.h"
 
+#include "nrf_drv_saadc.h"
+#include "ble_bas.h"
+
 #define APP_BLE_CONN_CFG_TAG 1 /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define DEVICE_NAME "Nordic_UART"												 /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME "m3miniCar"													 /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE BLE_UUID_TYPE_VENDOR_BEGIN /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO 3 /**< Application's BLE observer priority. You shouldn't need to modify this value. */
@@ -107,11 +110,14 @@
 #define UART_TX_BUF_SIZE 256 /**< UART TX buffer size. */
 #define UART_RX_BUF_SIZE 256 /**< UART RX buffer size. */
 
+#define BATTERY_LEVEL_MEAS_INTERVAL APP_TIMER_TICKS(120000) /**< Battery level measurement interval (ticks). This value corresponds to 120 seconds. */
+
 // Motor and servos pin
 #define PIN_PWM_SERVO 19 //4
 #define PIN_PWM_MOTOR 4	//28
 #define PIN_DIR_MOTOR 12 //29
 #define PIN_LUCES 47		 // 32+15
+#define PIN_DIV_BATTERY 10
 #define PIN_IN_MOTOR 30
 
 BLE_NUS_DEF(m_nus, NRF_SDH_BLE_TOTAL_LINK_COUNT); /**< BLE NUS service instance. */
@@ -119,11 +125,27 @@ NRF_BLE_GATT_DEF(m_gatt);													/**< GATT module instance. */
 NRF_BLE_QWR_DEF(m_qwr);														/**< Context for the Queued Write module.*/
 BLE_ADVERTISING_DEF(m_advertising);								/**< Advertising module instance. */
 
+BLE_BAS_DEF(m_bas);								 /**< Battery service instance. */
+APP_TIMER_DEF(m_battery_timer_id); /**< Battery measurement timer. */
+
+static nrf_saadc_value_t adc_buf[2];
+#define ADC_REF_VOLTAGE_IN_MILLIVOLTS 600 /**< Reference voltage (in milli volts) used by ADC while doing conversion. */
+#define ADC_PRE_SCALING_COMPENSATION 6		/**< The ADC is configured to use VDD with 1/3 prescaling as input. And hence the result of conversion is to be multiplied by 3 to get the actual value of the battery voltage.*/
+#define DIODE_FWD_VOLT_DROP_MILLIVOLTS 0	/**< Typical forward voltage drop of the diode . */
+#define ADC_RES_10BIT 1024
+
+#define ADC_RESULT_IN_MILLI_VOLTS(ADC_VALUE) \
+	((((ADC_VALUE)*ADC_REF_VOLTAGE_IN_MILLIVOLTS) / ADC_RES_10BIT) * ADC_PRE_SCALING_COMPENSATION)
+
+static void battery_level_meas_timeout_handler(void *p_context);
+
 static uint16_t m_conn_handle = BLE_CONN_HANDLE_INVALID;							 /**< Handle of the current connection. */
 static uint16_t m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - 3; /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
 static ble_uuid_t m_adv_uuids[] =																			 /**< Universally unique service identifier. */
 		{
-				{BLE_UUID_NUS_SERVICE, NUS_SERVICE_UUID_TYPE}};
+				{BLE_UUID_NUS_SERVICE, NUS_SERVICE_UUID_TYPE},
+				{BLE_UUID_BATTERY_SERVICE, BLE_UUID_TYPE_BLE},
+};
 
 typedef enum
 {
@@ -171,6 +193,11 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t *p_file_name)
 static void timers_init(void)
 {
 	ret_code_t err_code = app_timer_init();
+	APP_ERROR_CHECK(err_code);
+
+	err_code = app_timer_create(&m_battery_timer_id,
+															APP_TIMER_MODE_REPEATED,
+															battery_level_meas_timeout_handler);
 	APP_ERROR_CHECK(err_code);
 }
 
@@ -811,6 +838,123 @@ void pwm_init()
 	app_pwm_enable(&PWM1);
 }
 
+/**@brief Function for handling the Battery measurement timer timeout.
+ *
+ * @details This function will be called each time the battery level measurement timer expires.
+ *          This function will start the ADC.
+ *
+ * @param[in] p_context   Pointer used for passing some arbitrary information (context) from the
+ *                        app_start_timer() call to the timeout handler.
+ */
+static void battery_level_meas_timeout_handler(void *p_context)
+{
+	UNUSED_PARAMETER(p_context);
+
+	ret_code_t err_code;
+	err_code = 1;
+	err_code = nrf_drv_saadc_sample();
+	APP_ERROR_CHECK(err_code);
+}
+
+/**@brief Function for handling the Battery Service events.
+ *
+ * @details This function will be called for all Battery Service events which are passed to the
+ |          application.
+ *
+ * @param[in] p_bas  Battery Service structure.
+ * @param[in] p_evt  Event received from the Battery Service.
+ */
+static void on_bas_evt(ble_bas_t *p_bas, ble_bas_evt_t *p_evt)
+{
+	ret_code_t err_code;
+
+	switch (p_evt->evt_type)
+	{
+	case BLE_BAS_EVT_NOTIFICATION_ENABLED:
+		// Start battery timer
+		err_code = app_timer_start(m_battery_timer_id, BATTERY_LEVEL_MEAS_INTERVAL, NULL);
+		APP_ERROR_CHECK(err_code);
+		break; // BLE_BAS_EVT_NOTIFICATION_ENABLED
+
+	case BLE_BAS_EVT_NOTIFICATION_DISABLED:
+		err_code = app_timer_stop(m_battery_timer_id);
+		APP_ERROR_CHECK(err_code);
+		break; // BLE_BAS_EVT_NOTIFICATION_DISABLED
+
+	default:
+		// No implementation needed.
+		break;
+	}
+}
+
+static void bas_init(void)
+{
+	ret_code_t err_code;
+	ble_bas_init_t bas_init_obj;
+
+	memset(&bas_init_obj, 0, sizeof(bas_init_obj));
+
+	bas_init_obj.evt_handler = on_bas_evt;
+	bas_init_obj.support_notification = true;
+	bas_init_obj.p_report_ref = NULL;
+	bas_init_obj.initial_batt_level = 100;
+
+	bas_init_obj.bl_rd_sec = SEC_OPEN;
+	bas_init_obj.bl_cccd_wr_sec = SEC_OPEN;
+	bas_init_obj.bl_report_rd_sec = SEC_OPEN;
+
+	err_code = ble_bas_init(&m_bas, &bas_init_obj);
+	APP_ERROR_CHECK(err_code);
+}
+
+void saadc_event_handler(nrf_drv_saadc_evt_t const *p_event)
+{
+	if (p_event->type == NRF_DRV_SAADC_EVT_DONE)
+	{
+		nrf_saadc_value_t adc_result;
+		uint16_t batt_lvl_in_milli_volts;
+		uint8_t percentage_batt_lvl;
+		uint32_t err_code;
+
+		adc_result = p_event->data.done.p_buffer[0];
+
+		err_code = nrf_drv_saadc_buffer_convert(p_event->data.done.p_buffer, 1);
+		APP_ERROR_CHECK(err_code);
+
+		batt_lvl_in_milli_volts = ADC_RESULT_IN_MILLI_VOLTS(adc_result) +
+															DIODE_FWD_VOLT_DROP_MILLIVOLTS;
+		percentage_batt_lvl = battery_level_in_percent(batt_lvl_in_milli_volts);
+
+		err_code = ble_bas_battery_level_update(&m_bas, percentage_batt_lvl, BLE_CONN_HANDLE_ALL);
+		if ((err_code != NRF_SUCCESS) &&
+				(err_code != NRF_ERROR_INVALID_STATE) &&
+				(err_code != NRF_ERROR_RESOURCES) &&
+				(err_code != NRF_ERROR_BUSY) &&
+				(err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING))
+		{
+			APP_ERROR_HANDLER(err_code);
+		}
+	}
+}
+
+void saadc_init(void)
+{
+	ret_code_t err_code = nrf_drv_saadc_init(NULL, saadc_event_handler);
+	APP_ERROR_CHECK(err_code);
+
+	nrf_saadc_channel_config_t config =
+			NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_SE(PIN_DIV_BATTERY); //NRF_SAADC_INPUT_VDD
+
+	err_code = nrf_drv_saadc_channel_init(0, &config);
+	APP_ERROR_CHECK(err_code);
+
+	err_code = nrf_drv_saadc_buffer_convert(&adc_buf[0], 1);
+	APP_ERROR_CHECK(err_code);
+
+	err_code = nrf_drv_saadc_buffer_convert(&adc_buf[1], 1);
+	APP_ERROR_CHECK(err_code);
+}
+
 /**@brief Application main function.
  */
 int main(void)
@@ -826,6 +970,8 @@ int main(void)
 	ble_stack_init();
 	gap_params_init();
 	gatt_init();
+	saadc_init();
+	bas_init();
 	services_init();
 	advertising_init();
 	conn_params_init();
@@ -839,6 +985,7 @@ int main(void)
 	nrf_gpio_pin_clear(PIN_DIR_MOTOR);
 	//nrf_gpio_pin_clear(PIN_IN_MOTOR);
 	pwm_init();
+
 	m_command.command_t = DIRECCION_C;
 	m_command.velocidad = 200;
 	m_command.luz_estado = 0;

@@ -1,6 +1,7 @@
 {
   "version": "2.0.0",
-  "tasks": [{
+  "tasks": [
+    {
       "label": "build",
       "type": "shell",
       "command": "make",
@@ -113,6 +114,15 @@
       "command": "make sdk_config",
       "options": {
         "cwd": "${workspaceFolder}/pca10040/s132/armgcc"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "sdk_config_pca10056",
+      "type": "shell",
+      "command": "make sdk_config",
+      "options": {
+        "cwd": "${workspaceFolder}/pca10056/s140/armgcc"
       },
       "problemMatcher": []
     }
