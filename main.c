@@ -135,6 +135,7 @@ typedef enum
 	SENTIDO_A,
 	SENTIDO_R,
 	VELOCIDAD,
+	STOP,
 	LUCES
 } uart_command_t;
 
@@ -258,13 +259,20 @@ static void nus_data_handler(ble_nus_evt_t *p_evt)
 		}
 		else if (strcmp(uart_string, "SENTIDO_A") == 0)
 		{
-			m_command.command_t = SENTIDO_A;
 			m_command.servo_pos = atoi(pch);
+			if (m_command.servo_pos > 0)
+				m_command.command_t = SENTIDO_A;
+			else
+				m_command.command_t = STOP;
 		}
 		else if (strcmp(uart_string, "SENTIDO_R") == 0)
 		{
-			m_command.command_t = SENTIDO_R;
+
 			m_command.servo_pos = atoi(pch);
+			if (m_command.servo_pos > 0)
+				m_command.command_t = SENTIDO_R;
+			else
+				m_command.command_t = STOP;
 		}
 		else if (strcmp(uart_string, "LUCES") == 0)
 		{
@@ -753,7 +761,7 @@ void uart_command_handler(uart_command_obj *m_command)
 
 	case DIRECCION_C:
 		// Put Action to COMMAND_3 here.
-		while (app_pwm_channel_duty_set(&PWM1, 0, 8) == NRF_ERROR_BUSY)
+		while (app_pwm_channel_duty_set(&PWM1, 0, 7) == NRF_ERROR_BUSY)
 			;
 		break;
 
@@ -774,6 +782,12 @@ void uart_command_handler(uart_command_obj *m_command)
 		// Put Action to COMMAND_3 here.sd
 		nrf_gpio_pin_clear(PIN_DIR_MOTOR);
 		while (app_pwm_channel_duty_set(&PWM1, 1, m_command->servo_pos) == NRF_ERROR_BUSY)
+			;
+		break;
+	case STOP:
+		// Put Action to COMMAND_3 here.sd
+		nrf_gpio_pin_clear(PIN_DIR_MOTOR);
+		while (app_pwm_channel_duty_set(&PWM1, 1, 100) == NRF_ERROR_BUSY)
 			;
 		break;
 	case LUCES:
@@ -839,8 +853,8 @@ int main(void)
 	nrf_gpio_pin_clear(PIN_DIR_MOTOR);
 	//nrf_gpio_pin_clear(PIN_IN_MOTOR);
 	pwm_init();
-	m_command.command_t = DIRECCION_C;
-	m_command.velocidad = 200;
+	m_command.command_t = STOP;
+	m_command.velocidad = 0;
 	m_command.luz_estado = 0;
 	// Enter main loop.
 	for (;;)
