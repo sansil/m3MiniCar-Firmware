@@ -845,7 +845,7 @@ void pwm_init()
 			.pins = {PIN_PWM_SERVO, PIN_PWM_MOTOR},
 			.pin_polarity = {APP_PWM_POLARITY_ACTIVE_HIGH, APP_PWM_POLARITY_ACTIVE_LOW},
 			.num_of_channels = 2,
-			.period_us = 20000L};
+			.period_us = 8000L};
 	uint32_t err_code;
 	err_code = app_pwm_init(&PWM1, &pwm_config, NULL);
 	APP_ERROR_CHECK(err_code);
